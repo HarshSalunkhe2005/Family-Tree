@@ -75,24 +75,31 @@ function bfsPath(adj, startId, endId) {
 
 // ─── Main Function ───
 
-export function getRelationship(members, idA, idB) {
-  if (!idA || !idB) return { label: 'Unknown', explanation: '' };
-  if (idA === idB) return { label: 'Self', explanation: 'Same person' };
+export function getRelationship(members, idA, idB, language = 'en') {
+  if (!idA || !idB) return { label: language === 'hi' ? 'Agyat (अज्ञात)' : 'Unknown', explanation: '' };
+  if (idA === idB) return { label: language === 'hi' ? 'Swayam (स्वयं)' : 'Self', explanation: language === 'hi' ? 'Saman Vyakti' : 'Same person' };
 
   const { adj, byId } = buildGraph(members);
   const personA = byId[idA];
   const personB = byId[idB];
-  if (!personA || !personB) return { label: 'Unknown', explanation: 'Could not find one or both members' };
+  if (!personA || !personB) return { label: language === 'hi' ? 'Agyat (अज्ञात)' : 'Unknown', explanation: 'Could not find one or both members' };
 
   // To find "What is A to B", we find the path FROM B TO A.
   const path = bfsPath(adj, idB, idA);
   if (!path || path.length === 0) {
-    return { label: 'No Connection', explanation: `${personA.name} and ${personB.name} are not connected in this tree` };
+    return { label: language === 'hi' ? 'Koi Sambandh Nahi (कोई संबंध नहीं)' : 'No Connection', explanation: `${personA.name} and ${personB.name} are not connected in this tree` };
   }
 
   // Count steps in the B -> A direction
   const steps = path.map(s => s.relation);
+  const pathNodes = [personB, ...path.map(p => byId[p.to])];
   const gA = personA.gender === 'female' ? 'f' : 'm';
+  const gB = personB.gender === 'female' ? 'f' : 'm';
+
+  if (language === 'hi') {
+    const hindiRes = getHindiRelationship(gA, gB, steps, pathNodes, personA, personB);
+    if (hindiRes) return hindiRes;
+  }
 
   // ─── Direct relationships (path length 1) ───
   if (steps.length === 1) {
@@ -229,4 +236,95 @@ function ordinal(n) {
   const s = ['th', 'st', 'nd', 'rd'];
   const v = n % 100;
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+function getHindiRelationship(gA, gB, steps, pathNodes, personA, personB) {
+  const s = steps.join(',');
+
+  // Path length 1
+  if (s === 'spouse') return { label: gA === 'f' ? 'Patni (पत्नी)' : 'Pati (पति)', explanation: `${personA.name}, ${personB.name} ${gB === 'f' ? 'ke pati' : 'ki patni'} hain` };
+  if (s === 'parent') return { label: gA === 'f' ? 'Maa (माँ)' : 'Pita (पिता)', explanation: `${personA.name}, ${personB.name} ${gA === 'f' ? 'ki maa' : 'ke pita'} hain` };
+  if (s === 'child') return { label: gA === 'f' ? 'Beti (बेटी)' : 'Beta (बेटा)', explanation: `${personA.name}, ${personB.name} ${gA === 'f' ? 'ki beti' : 'ka beta'} hai` };
+
+  // Path length 2
+  if (s === 'parent,parent') {
+    const p1 = pathNodes[1];
+    if (p1.gender === 'male') return { label: gA === 'f' ? 'Dadi (दादी)' : 'Dada (दादा)', explanation: `${personA.name}, ${personB.name} ke pita ke ${gA === 'f' ? 'maa' : 'pita'} hain` };
+    if (p1.gender === 'female') return { label: gA === 'f' ? 'Nani (नानी)' : 'Nana (नाना)', explanation: `${personA.name}, ${personB.name} ki maa ke ${gA === 'f' ? 'maa' : 'pita'} hain` };
+  }
+  if (s === 'child,child') {
+    const p1 = pathNodes[1];
+    if (p1.gender === 'male') return { label: gA === 'f' ? 'Poti (पोती)' : 'Pota (पोता)', explanation: `${personA.name}, ${personB.name} ke bete ki/ka ${gA === 'f' ? 'beti' : 'beta'} hai` };
+    if (p1.gender === 'female') return { label: gA === 'f' ? 'Natin / Dhevti (नातिन)' : 'Nati / Dhevta (नाती)', explanation: `${personA.name}, ${personB.name} ki beti ki/ka ${gA === 'f' ? 'beti' : 'beta'} hai` };
+  }
+  if (s === 'parent,child') return { label: gA === 'f' ? 'Behan (बहन)' : 'Bhai (भाई)', explanation: `${personA.name}, ${personB.name} ${gA === 'f' ? 'ki behan' : 'ka bhai'} hai` };
+  if (s === 'parent,spouse') return { label: gA === 'f' ? 'Sauteli Maa (सौतेली माँ)' : 'Sautela Pita (सौतेला पिता)', explanation: `${personA.name}, ${personB.name} ${gA === 'f' ? 'ki sauteli maa' : 'ke sautela pita'} hain` };
+  if (s === 'child,spouse') {
+    const p1 = pathNodes[1];
+    if (p1.gender === 'male') return { label: 'Bahu (बहू)', explanation: `${personA.name}, ${personB.name} ke bete ki patni hai` };
+    if (p1.gender === 'female') return { label: 'Damad (दामाद)', explanation: `${personA.name}, ${personB.name} ki beti ka pati hai` };
+  }
+  if (s === 'spouse,parent') return { label: gA === 'f' ? 'Saas (सास)' : 'Sasur (ससुर)', explanation: `${personA.name}, ${personB.name} ${gB === 'f' ? 'ke pati' : 'ki patni'} ke/ki ${gA === 'f' ? 'maa' : 'pita'} hain` };
+  if (s === 'spouse,child') return { label: gA === 'f' ? 'Sauteli Beti (सौतेली बेटी)' : 'Sautela Beta (सौतेला बेटा)', explanation: `${personA.name}, ${personB.name} ke pati/patni ki beti/beta hai` };
+
+  // Path length 3
+  if (s === 'parent,parent,parent') {
+    const p1 = pathNodes[1];
+    if (p1.gender === 'male') return { label: gA === 'f' ? 'Par-Dadi (पर-दादी)' : 'Par-Dada (पर-दादा)', explanation: `${personA.name}, ${personB.name} ke dada/dadi ke/ki maa/pita hain` };
+    if (p1.gender === 'female') return { label: gA === 'f' ? 'Par-Nani (पर-नानी)' : 'Par-Nana (पर-नाना)', explanation: `${personA.name}, ${personB.name} ke nana/nani ke/ki maa/pita hain` };
+  }
+  if (s === 'child,child,child') {
+    return { label: gA === 'f' ? 'Par-Poti / Par-Natin (पर-पोती/पर-नातिन)' : 'Par-Pota / Par-Nati (पर-पोता/पर-नाती)', explanation: `${personA.name}, ${personB.name} ke pota/poti/nati/natin ki/ka beti/beta hai` };
+  }
+  if (s === 'parent,parent,child') {
+    const p1 = pathNodes[1];
+    if (p1.gender === 'male') return { label: gA === 'f' ? 'Bua (बुआ)' : 'Chacha / Tau (चाचा/ताऊ)', explanation: `${personA.name}, ${personB.name} ke pita ke bhai/behan hain` };
+    if (p1.gender === 'female') return { label: gA === 'f' ? 'Mausi (मौसी)' : 'Mama (मामा)', explanation: `${personA.name}, ${personB.name} ki maa ke bhai/behan hain` };
+  }
+  if (s === 'parent,child,child') {
+    const sibling = pathNodes[2];
+    if (sibling.gender === 'male') return { label: gA === 'f' ? 'Bhatiji (भतीजी)' : 'Bhatija (भतीजा)', explanation: `${personA.name}, ${personB.name} ke bhai ka bacha hai` };
+    if (sibling.gender === 'female') return { label: gA === 'f' ? 'Bhanji (भांजी)' : 'Bhanja (भांजा)', explanation: `${personA.name}, ${personB.name} ki behan ka bacha hai` };
+  }
+  if (s === 'parent,child,spouse') {
+    const sibling = pathNodes[2];
+    if (sibling.gender === 'male') return { label: 'Bhabhi (भाभी)', explanation: `${personA.name}, ${personB.name} ke bhai ki patni hai` };
+    if (sibling.gender === 'female') return { label: 'Jija (जीजा)', explanation: `${personA.name}, ${personB.name} ki behan ka pati hai` };
+  }
+  if (s === 'spouse,parent,child') {
+    const spouse = pathNodes[1];
+    if (spouse.gender === 'male') return { label: gA === 'f' ? 'Nanad (ननद)' : 'Devar / Jeth (देवर/जेठ)', explanation: `${personA.name}, ${personB.name} ke pati ke bhai/behan hain` };
+    if (spouse.gender === 'female') return { label: gA === 'f' ? 'Sali (साली)' : 'Sala (साला)', explanation: `${personA.name}, ${personB.name} ki patni ke bhai/behan hain` };
+  }
+  if (s === 'spouse,parent,parent') {
+    const parent = pathNodes[2];
+    if (parent.gender === 'male') return { label: gA === 'f' ? 'Dadi-Sasur (दादी-ससुर)' : 'Dada-Sasur (दादा-ससुर)', explanation: `${personA.name}, ${personB.name} ke pati/patni ke dada/dadi hain` };
+    if (parent.gender === 'female') return { label: gA === 'f' ? 'Nani-Sasur (नानी-ससुर)' : 'Nana-Sasur (नाना-ससुर)', explanation: `${personA.name}, ${personB.name} ke pati/patni ke nana/nani hain` };
+  }
+
+  // Path length 4
+  if (s === 'parent,parent,child,child') {
+    const p1 = pathNodes[1];
+    if (p1.gender === 'male') return { label: gA === 'f' ? 'Chacheri / Fuferi Behan (चचेरी/फुफेरी बहन)' : 'Chachera / Fufera Bhai (चचेरा/फुफेरा भाई)', explanation: `${personA.name}, ${personB.name} ke pita ke bhai/behan ka bacha hai` };
+    if (p1.gender === 'female') return { label: gA === 'f' ? 'Mameri / Mauseri Behan (ममेरी/मौसेरी बहन)' : 'Mamera / Mausera Bhai (ममेरा/मौसेरा भाई)', explanation: `${personA.name}, ${personB.name} ki maa ke bhai/behan ka bacha hai` };
+  }
+
+  // Fallbacks
+  const upCount = steps.filter(step => step === 'parent').length;
+  const downCount = steps.filter(step => step === 'child').length;
+  const spouseInPath = steps.includes('spouse');
+
+  if (upCount > 0 && downCount === 0 && !spouseInPath) {
+    const base = upCount >= 2 ? (gA === 'f' ? 'Dadi/Nani' : 'Dada/Nana') : (gA === 'f' ? 'Maa' : 'Pita');
+    const greats = upCount > 2 ? 'Par-'.repeat(upCount - 2) : '';
+    return { label: `${greats}${base}`, explanation: `${personA.name}, ${personB.name} se ${upCount} pidhi upar hain` };
+  }
+  if (downCount > 0 && upCount === 0 && !spouseInPath) {
+    const base = downCount >= 2 ? (gA === 'f' ? 'Poti/Natin' : 'Pota/Nati') : (gA === 'f' ? 'Beti' : 'Beta');
+    const greats = downCount > 2 ? 'Par-'.repeat(downCount - 2) : '';
+    return { label: `${greats}${base}`, explanation: `${personA.name}, ${personB.name} se ${downCount} pidhi niche hai` };
+  }
+
+  const suffix = spouseInPath ? ' (Vivah se)' : '';
+  return { label: `Dur ka Rishta (दूर का रिश्ता)`, explanation: `${personA.name} aur ${personB.name} ke beech ${steps.length} kadam ka rishta hai${suffix}` };
 }

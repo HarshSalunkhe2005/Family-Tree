@@ -17,6 +17,18 @@
         <div class="toolbar-divider" />
         <q-btn :class="['relation-btn', { active: relationMode }]" icon="route" label="Find Relation"
           dense flat @click="toggleRelationMode" />
+        <div class="toolbar-divider" style="margin-left: 12px" />
+        <q-btn-toggle
+          v-model="language"
+          flat dense
+          class="q-ml-sm"
+          style="border: 1px solid rgba(255,255,255,0.1); border-radius: 6px"
+          color="purple-5"
+          text-color="grey-5"
+          toggle-color="purple-5"
+          toggle-text-color="white"
+          :options="[{label: 'EN', value: 'en'}, {label: 'HI', value: 'hi'}]"
+        />
       </div>
 
       <div class="toolbar-right">
@@ -190,6 +202,7 @@ const searchOptions = ref([]);
 const tableFilter = ref('');
 const relationMode = ref(false);
 const selectedNodes = ref([]);
+const language = ref('en'); // 'en' or 'hi'
 
 const genderOpts = [{ label: '👨 Male', value: 'male' }, { label: '👩 Female', value: 'female' }];
 
@@ -253,10 +266,21 @@ function onNodeClick({ node }) {
       const [a, b] = selectedNodes.value;
       const personA = store.members.find(m => m.id === a);
       const personB = store.members.find(m => m.id === b);
-      const result = getRelationship(store.members, a, b);
-      $q.dialog({
-        title: '🔗 Relationship Found',
-        message: `<div style="text-align:center;padding:12px 0">
+      const result = getRelationship(store.members, a, b, language.value);
+      const msgHtml = language.value === 'hi'
+        ? `<div style="text-align:center;padding:12px 0">
+          <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:12px">
+            <div style="padding:6px 16px;border-radius:10px;background:${personA?.gender === 'female' ? 'rgba(244,114,182,0.15)' : 'rgba(96,165,250,0.15)'};border:1px solid ${personA?.gender === 'female' ? 'rgba(244,114,182,0.3)' : 'rgba(96,165,250,0.3)'};font-size:14px;font-weight:600">${personA?.name}</div>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:12px">
+            <div style="padding:6px 16px;border-radius:10px;background:${personB?.gender === 'female' ? 'rgba(244,114,182,0.15)' : 'rgba(96,165,250,0.15)'};border:1px solid ${personB?.gender === 'female' ? 'rgba(244,114,182,0.3)' : 'rgba(96,165,250,0.3)'};font-size:14px;font-weight:600">${personB?.name}</div>
+          </div>
+          <div style="font-size:11px;color:#6b7280;letter-spacing:2px;margin-bottom:4px">KE / KI (के / की)</div>
+          <div style="font-size:28px;font-weight:800;color:#a78bfa;margin:8px 0;letter-spacing:1px">${result.label}</div>
+          <div style="font-size:11px;color:#6b7280;letter-spacing:2px;margin-top:4px;margin-bottom:16px">HAIN (हैं)</div>
+          ${result.explanation ? `<div style="color:#9ca3af;font-size:12px;margin-top:8px;padding:8px 12px;background:rgba(139,92,246,0.08);border-radius:8px;border:1px solid rgba(139,92,246,0.15)">${result.explanation}</div>` : ''}
+        </div>`
+        : `<div style="text-align:center;padding:12px 0">
           <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:16px">
             <div style="padding:6px 16px;border-radius:10px;background:${personA?.gender === 'female' ? 'rgba(244,114,182,0.15)' : 'rgba(96,165,250,0.15)'};border:1px solid ${personA?.gender === 'female' ? 'rgba(244,114,182,0.3)' : 'rgba(96,165,250,0.3)'};font-size:14px;font-weight:600">${personA?.name}</div>
           </div>
@@ -267,7 +291,11 @@ function onNodeClick({ node }) {
             <div style="padding:6px 16px;border-radius:10px;background:${personB?.gender === 'female' ? 'rgba(244,114,182,0.15)' : 'rgba(96,165,250,0.15)'};border:1px solid ${personB?.gender === 'female' ? 'rgba(244,114,182,0.3)' : 'rgba(96,165,250,0.3)'};font-size:14px;font-weight:600">${personB?.name}</div>
           </div>
           ${result.explanation ? `<div style="color:#9ca3af;font-size:12px;margin-top:8px;padding:8px 12px;background:rgba(139,92,246,0.08);border-radius:8px;border:1px solid rgba(139,92,246,0.15)">${result.explanation}</div>` : ''}
-        </div>`,
+        </div>`;
+
+      $q.dialog({
+        title: '🔗 Relationship Found',
+        message: msgHtml,
         html: true, dark: true, ok: { color: 'purple-8', label: 'Done', unelevated: true },
       });
       selectedNodes.value = [];
