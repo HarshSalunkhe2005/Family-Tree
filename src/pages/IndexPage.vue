@@ -1,7 +1,7 @@
 <template>
   <q-page class="column bg-midnight text-white overflow-hidden" style="height: 100vh;">
     <!-- TOOLBAR -->
-    <div class="toolbar-wrap bg-dark-soft q-pa-sm row items-center shadow-2 border-b-accent">
+    <div class="toolbar-wrap bg-dark-soft q-pa-sm row items-center shadow-2 border-b-accent" style="flex-shrink: 0;">
       <q-icon name="account_tree" size="md" color="purple-4" class="q-mr-sm" />
       <div class="text-h6 text-bold text-purple-4 q-mr-lg app-title">Family Tree</div>
 
@@ -28,9 +28,9 @@
     </div>
 
     <!-- TAB PANELS -->
-    <q-tab-panels v-model="tab" animated class="col-grow bg-midnight">
-      <q-tab-panel name="chart" class="q-pa-none full-height">
-        <div class="flow-wrapper relative-position" @contextmenu.prevent="onBgRightClick">
+    <q-tab-panels v-model="tab" animated class="bg-midnight" style="flex: 1 1 auto; width: 100%; min-height: 0;">
+      <q-tab-panel name="chart" class="q-pa-none" style="height: 100%;">
+        <div class="flow-wrapper" style="position: relative; width: 100%; height: 100%;" @contextmenu.prevent="onBgRightClick">
           <VueFlow :nodes="flowNodes" :edges="flowEdges" :node-types="nodeTypes" :fit-view-on-init="true" @nodeClick="onNodeClick" @nodeContextMenu="onNodeRightClick" @nodeDragStop="onNodeDragStop" @paneReady="onPaneReady" class="solver-canvas">
             <Background color="#0a0e14" :gap="24" pattern-color="#141c28" />
           </VueFlow>
@@ -466,7 +466,6 @@ function handleImport(event) {
 .border-purple { border: 1.5px solid #9c27b0; }
 .border-cyan { border: 1.5px solid #00bcd4; }
 .border-b-accent { border-bottom: 1.5px solid rgba(156, 39, 176, 0.4); }
-.flow-wrapper { width: 100%; height: calc(100vh - 56px); }
 .solver-canvas { width: 100%; height: 100%; pointer-events: all; }
 .vue-flow__attribution { display: none; }
 .app-title { letter-spacing: 1px; font-size: 18px !important; }
@@ -485,12 +484,17 @@ function handleImport(event) {
 
 .empty-state {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   z-index: 5;
-  pointer-events: all;
+  pointer-events: none;
   text-align: center;
+}
+.empty-state > * {
+  pointer-events: all;
 }
 
 .relation-indicator {
