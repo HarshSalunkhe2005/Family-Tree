@@ -134,7 +134,7 @@
               <q-select v-model="form.gender" :options="genderOpts" label="Gender" dark filled color="purple-4" emit-value map-options />
             </div>
             <div class="col-6" v-if="!addDialog.isRoot">
-              <q-select v-model="form.relationType" :options="['Father', 'Mother', 'Son', 'Daughter', 'Spouse']" label="Relation" dark filled color="purple-4" />
+              <q-select v-model="form.relationType" :options="relationOptions" label="Relation" dark filled color="purple-4" @update:model-value="onRelationChange" />
             </div>
           </div>
           <q-input v-model="form.place" label="City / Place" dark filled color="purple-4" />
@@ -199,6 +199,24 @@ const editDialog = ref({ show: false, data: {} });
 const form = ref({ name: '', gender: 'male', place: '', phone: '', relationType: 'Son' });
 const searchModel = ref(null);
 const searchOptions = ref([]);
+
+const relationOptions = computed(() => {
+  if (addDialog.value.isRoot) return [];
+  const parent = store.members.find(m => m.id === addDialog.value.parentId);
+  if (!parent) return ['Father', 'Mother', 'Son', 'Daughter', 'Spouse'];
+  const spouseLabel = parent.gender === 'male' ? 'Wife' : 'Husband';
+  return ['Father', 'Mother', 'Son', 'Daughter', spouseLabel];
+});
+
+function onRelationChange(val) {
+  if (['Father', 'Son', 'Husband'].includes(val)) form.value.gender = 'male';
+  if (['Mother', 'Daughter', 'Wife'].includes(val)) form.value.gender = 'female';
+}
+
+function resetForm() {
+  form.value = { name: '', gender: 'male', place: '', phone: '', relationType: 'Son' };
+}
+
 const tableFilter = ref('');
 const relationMode = ref(false);
 const selectedNodes = ref([]);
@@ -345,17 +363,50 @@ function saveMember() {
   if (!form.value.name) return;
 
   if (!addDialog.value.isRoot) {
-    const parentId = addDialog.value.parentId;
+    const selectedId = addDialog.value.parentId;
+    const selectedNode = store.members.find(m => m.id === selectedId);
     const rel = form.value.relationType;
 
     if (['Father', 'Mother'].includes(rel)) {
-      // Add as parent of the selected node
-      const newId = store.addMember({ ...form.value, parentId: null, spouseId: null });
-      store.updateMember(parentId, { parentId: newId });
+      const isAddingFather = rel === 'Father';
+      const addedGender = isAddingFather ? 'male' : 'female';
+      form.value.gender = addedGender; // Enforce gender
+
+      if (selectedNode.parentId) {
+        // Node already has a primary parent
+        const primaryParent = store.members.find(m => m.id === selectedNode.parentId);
+        if (primaryParent) {
+          if (primaryParent.gender === addedGender) {
+            $q.notify({ message: `This member already has a ${rel}.`, color: 'red-8', icon: 'error' });
+            return;
+          }
+          if (primaryParent.spouseId) {
+            $q.notify({ message: `Both parents are already defined.`, color: 'red-8', icon: 'error' });
+            return;
+          }
+          // Add as spouse to the primary parent
+          store.addMember({ ...form.value, parentId: primaryParent.id, relationType: 'Spouse' });
+        } else {
+          // Fallback if primaryParent is missing
+          const newId = store.addMember({ ...form.value, parentId: null, spouseId: null });
+          store.updateMember(selectedId, { parentId: newId });
+        }
+      } else {
+        // No parent exists yet
+        const newId = store.addMember({ ...form.value, parentId: null, spouseId: null });
+        store.updateMember(selectedId, { parentId: newId });
+      }
     } else if (['Son', 'Daughter'].includes(rel)) {
-      store.addMember({ ...form.value, parentId, spouseId: null });
-    } else if (rel === 'Spouse') {
-      store.addMember({ ...form.value, parentId, relationType: 'Spouse' });
+      form.value.gender = rel === 'Son' ? 'male' : 'female';
+      store.addMember({ ...form.value, parentId: selectedId, spouseId: null });
+    } else if (['Spouse', 'Husband', 'Wife'].includes(rel)) {
+      if (selectedNode.spouseId) {
+        $q.notify({ message: 'This member already has a spouse.', color: 'red-8', icon: 'error' });
+        return;
+      }
+      if (rel === 'Husband') form.value.gender = 'male';
+      if (rel === 'Wife') form.value.gender = 'female';
+      store.addMember({ ...form.value, parentId: selectedId, relationType: 'Spouse' });
     }
   } else {
     store.addMember({ ...form.value, parentId: null, spouseId: null });
