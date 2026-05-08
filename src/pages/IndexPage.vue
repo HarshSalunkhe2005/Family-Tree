@@ -236,9 +236,6 @@ const columns = [
 const layoutResult = computed(() => computeLayout(store.members));
 
 // ─── Form helpers ───
-function resetForm() {
-  form.value = { name: '', gender: 'male', place: '', phone: '', relationType: 'Son' };
-}
 
 function openRootDialog() {
   addDialog.value = { show: true, isRoot: true, parentId: null };
