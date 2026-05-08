@@ -1,139 +1,213 @@
+/**
+ * Family Relationship Finder
+ *
+ * Finds the relationship between two people by:
+ * 1. Building an adjacency graph (parent ↔ child, spouse ↔ spouse)
+ * 2. Finding the path between two people
+ * 3. Walking the path to determine the exact relationship
+ *
+ * Returns both the relationship label AND a human-readable explanation.
+ */
+
+// ─── Helpers ───
+
+function buildGraph(members) {
+  const byId = {};
+  members.forEach(m => { byId[m.id] = m; });
+
+  // adjacency: id -> [{ id, relation }]
+  const adj = {};
+  const addEdge = (from, to, rel) => {
+    if (!adj[from]) adj[from] = [];
+    adj[from].push({ id: to, relation: rel });
+  };
+
+  members.forEach(m => {
+    if (m.parentId && byId[m.parentId]) {
+      addEdge(m.id, m.parentId, 'parent');
+      addEdge(m.parentId, m.id, 'child');
+    }
+    if (m.spouseId && byId[m.spouseId]) {
+      addEdge(m.id, m.spouseId, 'spouse');
+    }
+  });
+
+  return { adj, byId };
+}
+
+function bfsPath(adj, startId, endId) {
+  const visited = new Set();
+  const queue = [{ id: startId, path: [] }];
+  visited.add(startId);
+
+  while (queue.length > 0) {
+    const { id, path } = queue.shift();
+    if (id === endId) return path;
+
+    const neighbors = adj[id] || [];
+    for (const edge of neighbors) {
+      if (!visited.has(edge.id)) {
+        visited.add(edge.id);
+        queue.push({ id: edge.id, path: [...path, { to: edge.id, relation: edge.relation }] });
+      }
+    }
+  }
+  return null; // no path found
+}
+
+// ─── Main Function ───
+
 export function getRelationship(members, idA, idB) {
-  if (!idA || !idB || idA === idB) return 'Self';
+  if (!idA || !idB) return { label: 'Unknown', explanation: '' };
+  if (idA === idB) return { label: 'Self', explanation: 'Same person' };
 
-  const personA = members.find(m => m.id === idA);
-  const personB = members.find(m => m.id === idB);
-  if (!personA || !personB) return 'Unknown';
+  const { adj, byId } = buildGraph(members);
+  const personA = byId[idA];
+  const personB = byId[idB];
+  if (!personA || !personB) return { label: 'Unknown', explanation: 'Could not find one or both members' };
 
-  // 1. Direct Marriage Check
-  if (personA.spouseId === idB || personB.spouseId === idA) return 'Spouse';
-
-  const levels = {};
-  const queue = [];
-  const processed = new Set();
-  const roots = members.filter(m => !m.parentId);
-  const startNode = roots.length > 0 ? roots[0] : members[0];
-
-  if (startNode) {
-    levels[startNode.id] = 0;
-    queue.push(startNode.id);
+  const path = bfsPath(adj, idA, idB);
+  if (!path || path.length === 0) {
+    return { label: 'No Connection', explanation: `${personA.name} and ${personB.name} are not connected in this tree` };
   }
 
-  let head = 0;
-  while (head < queue.length) {
-    const currId = queue[head++];
-    if (processed.has(currId)) continue;
-    processed.add(currId);
+  // Count steps in each direction
+  const steps = path.map(s => s.relation);
+  const gB = personB.gender === 'female' ? 'f' : 'm';
 
-    const currLevel = levels[currId];
-    const currNode = members.find(m => m.id === currId);
+  // ─── Direct relationships (path length 1) ───
+  if (steps.length === 1) {
+    if (steps[0] === 'spouse') return { label: gB === 'f' ? 'Wife' : 'Husband', explanation: `${personA.name}'s ${gB === 'f' ? 'wife' : 'husband'}` };
+    if (steps[0] === 'parent') return { label: gB === 'f' ? 'Mother' : 'Father', explanation: `${personB.name} is ${personA.name}'s ${gB === 'f' ? 'mother' : 'father'}` };
+    if (steps[0] === 'child') return { label: gB === 'f' ? 'Daughter' : 'Son', explanation: `${personB.name} is ${personA.name}'s ${gB === 'f' ? 'daughter' : 'son'}` };
+  }
 
-    const spouse = members.find(s => s.spouseId === currId || s.id === currNode?.spouseId);
-    if (spouse && levels[spouse.id] === undefined) {
-      levels[spouse.id] = currLevel;
-      queue.push(spouse.id);
+  // ─── Path length 2 ───
+  if (steps.length === 2) {
+    const [s1, s2] = steps;
+
+    // parent → parent = grandparent
+    if (s1 === 'parent' && s2 === 'parent') return { label: gB === 'f' ? 'Grandmother' : 'Grandfather', explanation: `${personB.name} is ${personA.name}'s ${gB === 'f' ? 'grandmother' : 'grandfather'}` };
+    // child → child = grandchild
+    if (s1 === 'child' && s2 === 'child') return { label: gB === 'f' ? 'Granddaughter' : 'Grandson', explanation: `${personB.name} is ${personA.name}'s ${gB === 'f' ? 'granddaughter' : 'grandson'}` };
+    // parent → child = sibling (same parent, different person)
+    if (s1 === 'parent' && s2 === 'child') return { label: gB === 'f' ? 'Sister' : 'Brother', explanation: `${personB.name} is ${personA.name}'s ${gB === 'f' ? 'sister' : 'brother'}` };
+    // parent → spouse = step-parent (parent's spouse)
+    if (s1 === 'parent' && s2 === 'spouse') return { label: gB === 'f' ? 'Mother' : 'Father', explanation: `${personB.name} is ${personA.name}'s ${gB === 'f' ? 'mother' : 'father'} (by marriage)` };
+    // child → spouse = child-in-law
+    if (s1 === 'child' && s2 === 'spouse') return { label: gB === 'f' ? 'Daughter-in-law' : 'Son-in-law', explanation: `${personB.name} is married to ${personA.name}'s ${byId[path[0].to]?.gender === 'female' ? 'daughter' : 'son'}` };
+    // spouse → parent = parent-in-law
+    if (s1 === 'spouse' && s2 === 'parent') return { label: gB === 'f' ? 'Mother-in-law' : 'Father-in-law', explanation: `${personB.name} is ${personA.name}'s ${gB === 'f' ? 'mother' : 'father'}-in-law` };
+    // spouse → child = stepchild
+    if (s1 === 'spouse' && s2 === 'child') return { label: gB === 'f' ? 'Daughter' : 'Son', explanation: `${personB.name} is ${personA.name}'s step-${gB === 'f' ? 'daughter' : 'son'}` };
+  }
+
+  // ─── Path length 3 ───
+  if (steps.length === 3) {
+    const [s1, s2, s3] = steps;
+
+    // parent → parent → parent = great-grandparent
+    if (s1 === 'parent' && s2 === 'parent' && s3 === 'parent') return { label: gB === 'f' ? 'Great-Grandmother' : 'Great-Grandfather', explanation: `${personB.name} is ${personA.name}'s great-${gB === 'f' ? 'grandmother' : 'grandfather'}` };
+    // child → child → child = great-grandchild
+    if (s1 === 'child' && s2 === 'child' && s3 === 'child') return { label: gB === 'f' ? 'Great-Granddaughter' : 'Great-Grandson', explanation: `${personB.name} is ${personA.name}'s great-${gB === 'f' ? 'granddaughter' : 'grandson'}` };
+
+    // parent → parent → child = uncle/aunt (parent's sibling)
+    if (s1 === 'parent' && s2 === 'parent' && s3 === 'child') return { label: gB === 'f' ? 'Aunt' : 'Uncle', explanation: `${personB.name} is ${personA.name}'s ${gB === 'f' ? 'aunt' : 'uncle'} (parent's sibling)` };
+    // parent → child → child = nephew/niece (sibling's child)
+    if (s1 === 'parent' && s2 === 'child' && s3 === 'child') return { label: gB === 'f' ? 'Niece' : 'Nephew', explanation: `${personB.name} is ${personA.name}'s ${gB === 'f' ? 'niece' : 'nephew'}` };
+
+    // parent → child → spouse = sibling-in-law
+    if (s1 === 'parent' && s2 === 'child' && s3 === 'spouse') return { label: gB === 'f' ? 'Sister-in-law' : 'Brother-in-law', explanation: `${personB.name} is married to ${personA.name}'s sibling` };
+    // spouse → parent → child = sibling-in-law (spouse's sibling)
+    if (s1 === 'spouse' && s2 === 'parent' && s3 === 'child') return { label: gB === 'f' ? 'Sister-in-law' : 'Brother-in-law', explanation: `${personB.name} is ${personA.name}'s spouse's sibling` };
+
+    // spouse → parent → parent = grandparent-in-law
+    if (s1 === 'spouse' && s2 === 'parent' && s3 === 'parent') return { label: gB === 'f' ? 'Grandmother-in-law' : 'Grandfather-in-law', explanation: `${personB.name} is ${personA.name}'s spouse's ${gB === 'f' ? 'grandmother' : 'grandfather'}` };
+
+    // parent → parent → spouse = step-grandparent or grandparent by marriage
+    if (s1 === 'parent' && s2 === 'parent' && s3 === 'spouse') return { label: gB === 'f' ? 'Grandmother' : 'Grandfather', explanation: `${personB.name} is ${personA.name}'s ${gB === 'f' ? 'grandmother' : 'grandfather'} (by marriage)` };
+
+    // child → child → spouse = grandchild's spouse
+    if (s1 === 'child' && s2 === 'child' && s3 === 'spouse') return { label: gB === 'f' ? 'Granddaughter-in-law' : 'Grandson-in-law', explanation: `${personB.name} is married to ${personA.name}'s ${byId[path[1].to]?.gender === 'female' ? 'granddaughter' : 'grandson'}` };
+
+    // spouse → child → spouse = child-in-law
+    if (s1 === 'spouse' && s2 === 'child' && s3 === 'spouse') return { label: gB === 'f' ? 'Daughter-in-law' : 'Son-in-law', explanation: `${personB.name} is married to ${personA.name}'s step-child` };
+  }
+
+  // ─── Path length 4 ───
+  if (steps.length === 4) {
+    const [s1, s2, s3, s4] = steps;
+
+    // parent → parent → child → child = cousin
+    if (s1 === 'parent' && s2 === 'parent' && s3 === 'child' && s4 === 'child') {
+      return { label: 'Cousin', explanation: `${personA.name} and ${personB.name} are first cousins (share grandparents)` };
     }
-
-    members.filter(m => m.parentId === currId || (spouse && m.parentId === spouse.id)).forEach(child => {
-      if (levels[child.id] === undefined) {
-        levels[child.id] = currLevel + 1;
-        queue.push(child.id);
-      }
-    });
-
-    if (currNode?.parentId && levels[currNode.parentId] === undefined) {
-      levels[currNode.parentId] = currLevel - 1;
-      queue.push(currNode.parentId);
+    // parent → parent → child → spouse = cousin's spouse (cousin-in-law)
+    if (s1 === 'parent' && s2 === 'parent' && s3 === 'child' && s4 === 'spouse') {
+      return { label: 'Cousin-in-law', explanation: `${personB.name} is married to ${personA.name}'s cousin` };
+    }
+    // spouse → parent → parent → child = spouse's uncle/aunt or cousin context
+    if (s1 === 'spouse' && s2 === 'parent' && s3 === 'parent' && s4 === 'child') {
+      return { label: gB === 'f' ? 'Aunt-in-law' : 'Uncle-in-law', explanation: `${personB.name} is ${personA.name}'s spouse's ${gB === 'f' ? 'aunt' : 'uncle'}` };
+    }
+    // parent → parent → parent → child = great-uncle/aunt
+    if (s1 === 'parent' && s2 === 'parent' && s3 === 'parent' && s4 === 'child') {
+      return { label: gB === 'f' ? 'Great-Aunt' : 'Great-Uncle', explanation: `${personB.name} is ${personA.name}'s great-${gB === 'f' ? 'aunt' : 'uncle'}` };
+    }
+    // parent → child → child → child = grand-nephew/niece
+    if (s1 === 'parent' && s2 === 'child' && s3 === 'child' && s4 === 'child') {
+      return { label: gB === 'f' ? 'Grand-Niece' : 'Grand-Nephew', explanation: `${personB.name} is ${personA.name}'s sibling's grandchild` };
+    }
+    // parent × 4 = great-great-grandparent
+    if (steps.every(s => s === 'parent')) {
+      return { label: gB === 'f' ? 'Great-Great-Grandmother' : 'Great-Great-Grandfather', explanation: `${personB.name} is ${personA.name}'s great-great-${gB === 'f' ? 'grandmother' : 'grandfather'}` };
+    }
+    // child × 4 = great-great-grandchild
+    if (steps.every(s => s === 'child')) {
+      return { label: gB === 'f' ? 'Great-Great-Granddaughter' : 'Great-Great-Grandson', explanation: `${personB.name} is ${personA.name}'s great-great-${gB === 'f' ? 'granddaughter' : 'grandson'}` };
     }
   }
 
-  const delta = levels[idB] - levels[idA];
-  const genB = personB.gender?.toLowerCase();
-  const bPartner = members.find(m => m.spouseId === idB || m.id === personB.spouseId);
-  const aPartner = members.find(m => m.spouseId === idA || m.id === personA.spouseId);
+  // ─── Fallback: generic analysis ───
+  const upCount = steps.filter(s => s === 'parent').length;
+  const downCount = steps.filter(s => s === 'child').length;
+  const spouseInPath = steps.includes('spouse');
 
-  // Helper: get the direct parent (or parent's spouse) of a person
-  function getParentIds(personId) {
-    const p = members.find(m => m.id === personId);
-    if (!p || !p.parentId) return [];
-    const parent = members.find(m => m.id === p.parentId);
-    if (!parent) return [p.parentId];
-    const ids = [parent.id];
-    if (parent.spouseId) ids.push(parent.spouseId);
-    const spouseOfParent = members.find(m => m.spouseId === parent.id);
-    if (spouseOfParent) ids.push(spouseOfParent.id);
-    return [...new Set(ids)];
+  if (upCount > 0 && downCount === 0 && !spouseInPath) {
+    const greats = upCount > 2 ? 'Great-'.repeat(upCount - 2) : '';
+    const base = upCount >= 2 ? (gB === 'f' ? 'Grandmother' : 'Grandfather') : (gB === 'f' ? 'Mother' : 'Father');
+    return { label: `${greats}${base}`, explanation: `${personB.name} is ${upCount} generation${upCount > 1 ? 's' : ''} above ${personA.name}` };
   }
 
-  // SAME GENERATION
-  if (delta === 0) {
-    // Sibling check
-    if (personA.parentId && personB.parentId) {
-      const parentsA = getParentIds(idA);
-      const parentsB = getParentIds(idB);
-      const sharedParent = parentsA.some(p => parentsB.includes(p));
-      if (sharedParent) {
-        return genB === 'male' ? 'Brother' : 'Sister';
-      }
-    }
-
-    // Sibling-in-law: B's spouse is A's sibling
-    if (bPartner) {
-      const parentsA = getParentIds(idA);
-      const parentsBPartner = getParentIds(bPartner.id);
-      if (parentsA.length > 0 && parentsBPartner.length > 0 && parentsA.some(p => parentsBPartner.includes(p))) {
-        return genB === 'male' ? 'Brother-in-law' : 'Sister-in-law';
-      }
-    }
-
-    // Cousin check: shared grandparent but different parents
-    if (personA.parentId && personB.parentId && personA.parentId !== personB.parentId) {
-      const grandparentsA = getParentIds(personA.parentId);
-      const grandparentsB = getParentIds(personB.parentId);
-      // Also check spouse's parentId
-      const parentASpouse = members.find(m => m.spouseId === personA.parentId || m.id === members.find(x => x.id === personA.parentId)?.spouseId);
-      const parentBSpouse = members.find(m => m.spouseId === personB.parentId || m.id === members.find(x => x.id === personB.parentId)?.spouseId);
-      if (parentASpouse?.parentId) grandparentsA.push(...getParentIds(parentASpouse.id));
-      if (parentBSpouse?.parentId) grandparentsB.push(...getParentIds(parentBSpouse.id));
-
-      const sharedGrandparent = grandparentsA.some(g => grandparentsB.includes(g));
-      if (sharedGrandparent) {
-        return 'Cousin';
-      }
-    }
-
-    return 'Relative';
+  if (downCount > 0 && upCount === 0 && !spouseInPath) {
+    const greats = downCount > 2 ? 'Great-'.repeat(downCount - 2) : '';
+    const base = downCount >= 2 ? (gB === 'f' ? 'Granddaughter' : 'Grandson') : (gB === 'f' ? 'Daughter' : 'Son');
+    return { label: `${greats}${base}`, explanation: `${personB.name} is ${downCount} generation${downCount > 1 ? 's' : ''} below ${personA.name}` };
   }
 
-  // ONE GENERATION DOWN
-  if (delta === 1) {
-    const bIsDirectChild = personB.parentId === idA || (personA.spouseId && personB.parentId === personA.spouseId);
-    if (bIsDirectChild) return genB === 'male' ? 'Son' : 'Daughter';
-
-    if (bPartner) {
-        const partnerIsAChild = bPartner.parentId === idA || (personA.spouseId && bPartner.parentId === personA.spouseId);
-        if (partnerIsAChild) return genB === 'male' ? 'Son-in-law' : 'Daughter-in-law';
+  if (upCount > 0 && downCount > 0) {
+    if (upCount === downCount) {
+      const cousinLevel = upCount - 1;
+      if (cousinLevel === 1) return { label: 'Cousin', explanation: `${personA.name} and ${personB.name} are first cousins` };
+      if (cousinLevel === 2) return { label: 'Second Cousin', explanation: `${personA.name} and ${personB.name} are second cousins (share great-grandparents)` };
+      return { label: `${ordinal(cousinLevel)} Cousin`, explanation: `${personA.name} and ${personB.name} share an ancestor ${upCount} generations up` };
     }
-    return genB === 'male' ? 'Nephew' : 'Niece';
+    const minGen = Math.min(upCount, downCount);
+    const removed = Math.abs(upCount - downCount);
+    const cousinLevel = minGen - 1;
+    if (cousinLevel >= 1) {
+      return { label: `${ordinal(cousinLevel)} Cousin ${removed}× removed`, explanation: `${personA.name} and ${personB.name} are ${ordinal(cousinLevel)} cousins, ${removed} generation${removed > 1 ? 's' : ''} apart` };
+    }
   }
 
-  // ONE GENERATION UP
-  if (delta === -1) {
-    // CRITICAL FIX: If B is married to A's parent, B is A's parent
-    const bIsDirectParent = personA.parentId === idB || (personA.parentId && members.find(m => m.id === personA.parentId)?.spouseId === idB);
-    if (bIsDirectParent) return genB === 'male' ? 'Father' : 'Mother';
+  // Absolute fallback
+  const totalSteps = steps.length;
+  const suffix = spouseInPath ? ' (by marriage)' : '';
+  return { label: `Extended Family${suffix}`, explanation: `${personA.name} and ${personB.name} are connected through ${totalSteps} step${totalSteps > 1 ? 's' : ''} in the family tree` };
+}
 
-    if (aPartner) {
-        const partnerIsBParent = aPartner.parentId === idB || (personB.spouseId && aPartner.parentId === personB.spouseId);
-        if (partnerIsBParent) return genB === 'male' ? 'Father-in-law' : 'Mother-in-law';
-    }
-    return genB === 'male' ? 'Uncle' : 'Aunt';
-  }
-
-  if (delta === 2) return genB === 'male' ? 'Grandson' : 'Granddaughter';
-  if (delta === -2) return genB === 'male' ? 'Grandfather' : 'Grandmother';
-  if (delta === 3) return genB === 'male' ? 'Great-Grandson' : 'Great-Granddaughter';
-  if (delta === -3) return genB === 'male' ? 'Great-Grandfather' : 'Great-Grandmother';
-
-  return delta > 0 ? 'Descendant' : 'Ancestor';
+function ordinal(n) {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
