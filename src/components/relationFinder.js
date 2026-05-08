@@ -76,18 +76,23 @@ function bfsPath(adj, startId, endId) {
 // ─── Main Function ───
 
 export function getRelationship(members, idA, idB, language = 'en') {
-  if (!idA || !idB) return { label: language === 'hi' ? 'Agyat (अज्ञात)' : 'Unknown', explanation: '' };
-  if (idA === idB) return { label: language === 'hi' ? 'Swayam (स्वयं)' : 'Self', explanation: language === 'hi' ? 'Saman Vyakti' : 'Same person' };
+  const getUnk = () => language === 'hi' ? 'Agyat (अज्ञात)' : (language === 'mr' ? 'Adnyat (अज्ञात)' : 'Unknown');
+  const getSelf = () => language === 'hi' ? 'Swayam (स्वयं)' : (language === 'mr' ? 'Satah (स्वतः)' : 'Self');
+  const getSelfExp = () => language === 'hi' ? 'Saman Vyakti' : (language === 'mr' ? 'Saman Vyakti' : 'Same person');
+
+  if (!idA || !idB) return { label: getUnk(), explanation: '' };
+  if (idA === idB) return { label: getSelf(), explanation: getSelfExp() };
 
   const { adj, byId } = buildGraph(members);
   const personA = byId[idA];
   const personB = byId[idB];
-  if (!personA || !personB) return { label: language === 'hi' ? 'Agyat (अज्ञात)' : 'Unknown', explanation: 'Could not find one or both members' };
+  if (!personA || !personB) return { label: getUnk(), explanation: 'Could not find one or both members' };
 
   // To find "What is A to B", we find the path FROM B TO A.
   const path = bfsPath(adj, idB, idA);
   if (!path || path.length === 0) {
-    return { label: language === 'hi' ? 'Koi Sambandh Nahi (कोई संबंध नहीं)' : 'No Connection', explanation: `${personA.name} and ${personB.name} are not connected in this tree` };
+    const noConn = language === 'hi' ? 'Koi Sambandh Nahi (कोई संबंध नहीं)' : (language === 'mr' ? 'Kahihi Sambandh Nahi (काहीही संबंध नाही)' : 'No Connection');
+    return { label: noConn, explanation: `${personA.name} and ${personB.name} are not connected in this tree` };
   }
 
   // Count steps in the B -> A direction
@@ -99,6 +104,10 @@ export function getRelationship(members, idA, idB, language = 'en') {
   if (language === 'hi') {
     const hindiRes = getHindiRelationship(gA, gB, steps, pathNodes, personA, personB);
     if (hindiRes) return hindiRes;
+  }
+  if (language === 'mr') {
+    const marathiRes = getMarathiRelationship(gA, gB, steps, pathNodes, personA, personB);
+    if (marathiRes) return marathiRes;
   }
 
   // ─── Direct relationships (path length 1) ───
@@ -327,4 +336,79 @@ function getHindiRelationship(gA, gB, steps, pathNodes, personA, personB) {
 
   const suffix = spouseInPath ? ' (Vivah se)' : '';
   return { label: `Dur ka Rishta (दूर का रिश्ता)`, explanation: `${personA.name} aur ${personB.name} ke beech ${steps.length} kadam ka rishta hai${suffix}` };
+}
+
+function getMarathiRelationship(gA, gB, steps, pathNodes, personA, personB) {
+  const s = steps.join(',');
+
+  // Path length 1
+  if (s === 'spouse') return { label: gA === 'f' ? 'Patni / Bayko (पत्नी/बायको)' : 'Pati (पती)', explanation: `${personA.name}, ${personB.name} ${gB === 'f' ? 'che pati' : 'chi patni'} ahet` };
+  if (s === 'parent') return { label: gA === 'f' ? 'Aai (आई)' : 'Vadeel / Baba (वडील/बाबा)', explanation: `${personA.name}, ${personB.name} ${gA === 'f' ? 'chi aai' : 'che vadeel'} ahet` };
+  if (s === 'child') return { label: gA === 'f' ? 'Mulgi (मुलगी)' : 'Mulga (मुलगा)', explanation: `${personA.name}, ${personB.name} ${gA === 'f' ? 'chi mulgi' : 'cha mulga'} ahe` };
+
+  // Path length 2
+  if (s === 'parent,parent') return { label: gA === 'f' ? 'Aaji (आजी)' : 'Aajoba (आजोबा)', explanation: `${personA.name}, ${personB.name} chya aai/vadilanchi ${gA === 'f' ? 'aai' : 'vadeel'} ahet` };
+  if (s === 'child,child') return { label: gA === 'f' ? 'Naat (नात)' : 'Naatu (नातू)', explanation: `${personA.name}, ${personB.name} chya mula/mulichi ${gA === 'f' ? 'mulgi' : 'mulga'} ahe` };
+  
+  if (s === 'parent,child') return { label: gA === 'f' ? 'Bahin (बहीण)' : 'Bhau (भाऊ)', explanation: `${personA.name}, ${personB.name} ${gA === 'f' ? 'chi bahin' : 'cha bhau'} ahe` };
+  if (s === 'parent,spouse') return { label: gA === 'f' ? 'Savatra Aai (सावत्र आई)' : 'Savatra Vadeel (सावत्र वडील)', explanation: `${personA.name}, ${personB.name} ${gA === 'f' ? 'chi savatra aai' : 'che savatra vadeel'} ahet` };
+  if (s === 'child,spouse') {
+    const p1 = pathNodes[1];
+    if (p1.gender === 'male') return { label: 'Sun (सून)', explanation: `${personA.name}, ${personB.name} chya mulachi patni ahe` };
+    if (p1.gender === 'female') return { label: 'Jaavai (जावई)', explanation: `${personA.name}, ${personB.name} chya mulicha pati ahe` };
+  }
+  if (s === 'spouse,parent') return { label: gA === 'f' ? 'Saasu (सासू)' : 'Sasre (सासरे)', explanation: `${personA.name}, ${personB.name} ${gB === 'f' ? 'chya patiche' : 'chya patniche'} ${gA === 'f' ? 'aai' : 'vadeel'} ahet` };
+  if (s === 'spouse,child') return { label: gA === 'f' ? 'Savatra Mulgi (सावत्र मुलगी)' : 'Savatra Mulga (सावत्र मुलगा)', explanation: `${personA.name}, ${personB.name} chya pati/patnichi mulgi/mulga ahe` };
+
+  // Path length 3
+  if (s === 'parent,parent,parent') return { label: gA === 'f' ? 'Panji (पणजी)' : 'Panjoba (पणजोबा)', explanation: `${personA.name}, ${personB.name} chya aajoba/aajinchi ${gA === 'f' ? 'aai' : 'vadeel'} ahet` };
+  if (s === 'child,child,child') return { label: gA === 'f' ? 'Panti (पणती)' : 'Pantu (पणतू)', explanation: `${personA.name}, ${personB.name} chya naatu/naatichi ${gA === 'f' ? 'mulgi' : 'mulga'} ahe` };
+  
+  if (s === 'parent,parent,child') {
+    const p1 = pathNodes[1];
+    if (p1.gender === 'male') return { label: gA === 'f' ? 'Aatya (आत्या)' : 'Kaka (काका)', explanation: `${personA.name}, ${personB.name} chya vadilanche bhau/bahin ahet` };
+    if (p1.gender === 'female') return { label: gA === 'f' ? 'Mavshi (मावशी)' : 'Mama (मामा)', explanation: `${personA.name}, ${personB.name} chya aaiche bhau/bahin ahet` };
+  }
+  if (s === 'parent,child,child') {
+    const sibling = pathNodes[2];
+    if (sibling.gender === 'male') return { label: gA === 'f' ? 'Putni (पुतणी)' : 'Putnya (पुतण्या)', explanation: `${personA.name}, ${personB.name} chya bhauchi mulgi/mulga ahe` };
+    if (sibling.gender === 'female') return { label: gA === 'f' ? 'Bhachi (भाची)' : 'Bhacha (भाचा)', explanation: `${personA.name}, ${personB.name} chya bahinichi mulgi/mulga ahe` };
+  }
+  if (s === 'parent,child,spouse') {
+    const sibling = pathNodes[2];
+    if (sibling.gender === 'male') return { label: 'Vahini (वहिनी)', explanation: `${personA.name}, ${personB.name} chya bhauchi patni ahe` };
+    if (sibling.gender === 'female') return { label: 'Mehuna / Bhaoji (मेहुणा/भावोजी)', explanation: `${personA.name}, ${personB.name} chya bahinicha pati ahe` };
+  }
+  if (s === 'spouse,parent,child') {
+    const spouse = pathNodes[1];
+    if (spouse.gender === 'male') return { label: gA === 'f' ? 'Nanand (नणंद)' : 'Dir (दीर)', explanation: `${personA.name}, ${personB.name} chya patichi bahin/bhau ahe` };
+    if (spouse.gender === 'female') return { label: gA === 'f' ? 'Mehuni / Sali (मेहुणी/साली)' : 'Mehuna / Sala (मेहुणा/साला)', explanation: `${personA.name}, ${personB.name} chya patnichi bahin/bhau ahe` };
+  }
+  if (s === 'spouse,parent,parent') return { label: gA === 'f' ? 'Aaji Saasu (आजी सासू)' : 'Aajoba Sasre (आजोबा सासरे)', explanation: `${personA.name}, ${personB.name} chya pati/patniche aajoba/aaji ahet` };
+
+  // Path length 4
+  if (s === 'parent,parent,child,child') {
+    const p1 = pathNodes[1];
+    if (p1.gender === 'male') return { label: gA === 'f' ? 'Chulat/Aate Bahin (चुलत/आते बहीण)' : 'Chulat/Aatme Bhau (चुलत/आतमे भाऊ)', explanation: `${personA.name}, ${personB.name} chya vadilanchya bhau/bahinicha mulga/mulgi ahe` };
+    if (p1.gender === 'female') return { label: gA === 'f' ? 'Mame/Mavas Bahin (मामे/मावस बहीण)' : 'Mame/Mavas Bhau (मामे/मावस भाऊ)', explanation: `${personA.name}, ${personB.name} chya aaichya bhau/bahinicha mulga/mulgi ahe` };
+  }
+
+  // Fallbacks
+  const upCount = steps.filter(step => step === 'parent').length;
+  const downCount = steps.filter(step => step === 'child').length;
+  const spouseInPath = steps.includes('spouse');
+
+  if (upCount > 0 && downCount === 0 && !spouseInPath) {
+    const base = upCount >= 2 ? (gA === 'f' ? 'Aaji' : 'Aajoba') : (gA === 'f' ? 'Aai' : 'Vadeel');
+    const greats = upCount > 2 ? 'Pan-'.repeat(upCount - 2) : '';
+    return { label: `${greats}${base}`, explanation: `${personA.name}, ${personB.name} peksha ${upCount} pidhya var ahet` };
+  }
+  if (downCount > 0 && upCount === 0 && !spouseInPath) {
+    const base = downCount >= 2 ? (gA === 'f' ? 'Panti' : 'Pantu') : (gA === 'f' ? 'Mulgi' : 'Mulga');
+    const greats = downCount > 2 ? 'Pan-'.repeat(downCount - 2) : '';
+    return { label: `${greats}${base}`, explanation: `${personA.name}, ${personB.name} peksha ${downCount} pidhya khali ahe` };
+  }
+
+  const suffix = spouseInPath ? ' (Lagnamule)' : '';
+  return { label: `Durche Naate (दूरचे नाते)`, explanation: `${personA.name} ani ${personB.name} madhye ${steps.length} payryanche naate ahe${suffix}` };
 }
