@@ -8,11 +8,20 @@ export const useFamilyStore = defineStore('family', () => {
     localStorage.setItem('family-tree-data', JSON.stringify(val));
   }, { deep: true });
 
+  function generateId() {
+    // Collision-safe ID: timestamp + random suffix
+    return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 9);
+  }
+
+  function getChildrenOf(parentId) {
+    return members.value.filter(m => m.parentId === parentId);
+  }
+
   function addMember(data) {
     const isSpouseRelation = data.relationType === 'Spouse';
-    
+
     const newMember = {
-      id: Date.now().toString(),
+      id: generateId(),
       name: data.name,
       gender: data.gender,
       place: data.place || '',
@@ -33,6 +42,7 @@ export const useFamilyStore = defineStore('family', () => {
     }
 
     members.value.push(newMember);
+    return newMember.id;
   }
 
   function updateMember(id, updatedData) {
@@ -65,5 +75,22 @@ export const useFamilyStore = defineStore('family', () => {
     }));
   }
 
-  return { members, addMember, updateMember, moveSubtree, deleteMember };
+  function exportData() {
+    return JSON.stringify(members.value, null, 2);
+  }
+
+  function importData(jsonString) {
+    try {
+      const data = JSON.parse(jsonString);
+      if (Array.isArray(data)) {
+        members.value = data;
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
+  return { members, generateId, getChildrenOf, addMember, updateMember, moveSubtree, deleteMember, exportData, importData };
 });
