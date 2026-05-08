@@ -9,34 +9,25 @@ export const useFamilyStore = defineStore('family', () => {
   }, { deep: true });
 
   function generateId() {
-    // Collision-safe ID: timestamp + random suffix
     return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 9);
   }
 
-  function getChildrenOf(parentId) {
-    return members.value.filter(m => m.parentId === parentId);
-  }
-
   function addMember(data) {
-    const isSpouseRelation = data.relationType === 'Spouse';
-
     const newMember = {
       id: generateId(),
       name: data.name,
-      gender: data.gender,
+      gender: data.gender || 'male',
       place: data.place || '',
       phone: data.phone || '',
-      parentId: isSpouseRelation ? null : (data.parentId || null),
-      spouseId: isSpouseRelation ? data.parentId : (data.spouseId || null),
+      parentId: data.parentId || null,
+      spouseId: data.spouseId || null,
       relationType: data.relationType || 'independent',
-      // SPECIAL TAG: Explicitly marks this node as a horizontal relation
-      isSpouse: isSpouseRelation,
-      x: data.x,
-      y: data.y
     };
 
-    // If adding a spouse, we must also update the partner to point back
-    if (isSpouseRelation && data.parentId) {
+    // If adding a spouse, update the partner
+    if (data.relationType === 'Spouse' && data.parentId) {
+      newMember.spouseId = data.parentId;
+      newMember.parentId = null;
       const partner = members.value.find(m => m.id === data.parentId);
       if (partner) partner.spouseId = newMember.id;
     }
@@ -47,32 +38,32 @@ export const useFamilyStore = defineStore('family', () => {
 
   function updateMember(id, updatedData) {
     const index = members.value.findIndex(m => m.id === id);
-    if (index !== -1) members.value[index] = { ...members.value[index], ...updatedData };
-  }
-
-  function moveSubtree(id, dx, dy, visited = new Set()) {
-    if (visited.has(id)) return;
-    visited.add(id);
-    const member = members.value.find(m => m.id === id);
-    if (!member) return;
-    member.x += dx;
-    member.y += dy;
-    members.value.filter(m => m.parentId === id).forEach(child => {
-      moveSubtree(child.id, dx, dy, visited);
-    });
-    const spouse = members.value.find(m => m.spouseId === id || (m.id === member.spouseId));
-    if (spouse && spouse.id !== id) {
-      moveSubtree(spouse.id, dx, dy, visited);
+    if (index !== -1) {
+      members.value[index] = { ...members.value[index], ...updatedData };
     }
   }
 
   function deleteMember(id) {
-    const newMembers = members.value.filter(m => m.id !== id);
-    members.value = newMembers.map(m => ({
-      ...m,
-      parentId: m.parentId === id ? null : m.parentId,
-      spouseId: m.spouseId === id ? null : m.spouseId
-    }));
+    // Unlink spouse
+    const member = members.value.find(m => m.id === id);
+    if (member?.spouseId) {
+      const spouse = members.value.find(m => m.id === member.spouseId);
+      if (spouse) spouse.spouseId = null;
+    }
+    // Orphan children
+    members.value.forEach(m => {
+      if (m.parentId === id) m.parentId = null;
+    });
+    members.value = members.value.filter(m => m.id !== id);
+  }
+
+  function getChildrenOf(parentId) {
+    return members.value.filter(m => m.parentId === parentId);
+  }
+
+  // Get all children of a couple (both parent IDs)
+  function getCoupleChildren(id1, id2) {
+    return members.value.filter(m => m.parentId === id1 || m.parentId === id2);
   }
 
   function exportData() {
@@ -92,5 +83,13 @@ export const useFamilyStore = defineStore('family', () => {
     }
   }
 
-  return { members, generateId, getChildrenOf, addMember, updateMember, moveSubtree, deleteMember, exportData, importData };
+  function clearAll() {
+    members.value = [];
+    localStorage.removeItem('family-tree-data');
+  }
+
+  return {
+    members, generateId, addMember, updateMember, deleteMember,
+    getChildrenOf, getCoupleChildren, exportData, importData, clearAll
+  };
 });

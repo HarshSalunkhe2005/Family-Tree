@@ -1,8 +1,8 @@
 <template>
-  <div class="couple-junction">
-    <Handle id="left-port" type="target" :position="Position.Left" class="junction-handle" />
-    <Handle id="right-port" type="source" :position="Position.Right" class="junction-handle" />
-    <Handle type="source" :position="Position.Bottom" class="junction-handle" />
+  <div class="junction-dot">
+    <Handle type="target" :position="Position.Left" id="left" class="junc-handle" />
+    <Handle type="source" :position="Position.Right" id="right" class="junc-handle" />
+    <Handle type="source" :position="Position.Bottom" id="bottom" class="junc-handle" />
   </div>
 </template>
 
@@ -11,19 +11,19 @@ import { Handle, Position } from '@vue-flow/core';
 </script>
 
 <style scoped>
-.couple-junction {
-  width: 10px;
-  height: 10px;
+.junction-dot {
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  background: #d946ef;
-  border: 2px solid #a21caf;
-  box-shadow: 0 0 12px rgba(217, 70, 239, 0.5);
+  background: radial-gradient(circle, #e879f9, #a855f7);
+  border: 2px solid rgba(168, 85, 247, 0.6);
+  box-shadow: 0 0 16px rgba(168, 85, 247, 0.5);
 }
-.junction-handle {
+.junc-handle {
   width: 1px !important;
   height: 1px !important;
+  opacity: 0 !important;
   background: transparent !important;
   border: none !important;
-  opacity: 0;
 }
 </style>

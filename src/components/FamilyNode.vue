@@ -1,54 +1,59 @@
 <template>
-  <div :class="['family-node', data.gender === 'male' ? 'node-male' : 'node-female']">
-    <Handle type="target" :position="Position.Top" class="hidden-handle" />
+  <div :class="['family-node', genderClass]" @mouseenter="hovered = true" @mouseleave="hovered = false">
+    <Handle type="target" :position="Position.Top" id="top" class="invisible-handle" />
 
-    <div class="node-content">
-      <div class="node-icon-wrap">
-        <q-icon :name="data.gender === 'male' ? 'person' : 'person'" :class="data.gender === 'male' ? 'icon-male' : 'icon-female'" size="22px" />
+    <div class="node-body">
+      <div class="avatar-ring">
+        <q-icon :name="data.gender === 'female' ? 'woman' : 'man'" size="22px" />
       </div>
-      <div class="node-info">
-        <div class="name-text">{{ data.label }}</div>
-        <div v-if="data.place" class="place-text">
-          <q-icon name="location_on" size="11px" class="q-mr-xs" />{{ data.place }}
+      <div class="node-text">
+        <div class="node-name">{{ data.label }}</div>
+        <div v-if="data.place" class="node-place">
+          <q-icon name="place" size="10px" />
+          <span>{{ data.place }}</span>
         </div>
       </div>
     </div>
 
-    <Handle type="source" :position="Position.Bottom" class="hidden-handle" />
-    <Handle id="right-port" type="source" :position="Position.Right" class="hidden-handle" />
-    <Handle id="left-port" type="target" :position="Position.Left" class="hidden-handle" />
+    <Handle type="source" :position="Position.Bottom" id="bottom" class="invisible-handle" />
+    <Handle type="source" :position="Position.Right" id="right" class="invisible-handle" />
+    <Handle type="target" :position="Position.Left" id="left" class="invisible-handle" />
   </div>
 </template>
 
 <script setup>
+import { ref } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
-defineProps(['data']);
+const props = defineProps(['data']);
+const hovered = ref(false);
+const genderClass = props.data.gender === 'female' ? 'node-female' : 'node-male';
 </script>
 
 <style scoped>
 .family-node {
-  padding: 12px 20px;
-  border-radius: 14px;
-  min-width: 160px;
-  max-width: 220px;
-  position: relative;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  padding: 14px 18px;
+  border-radius: 16px;
+  min-width: 180px;
+  max-width: 200px;
   cursor: pointer;
-}
-.family-node:hover {
-  transform: translateY(-2px);
-  filter: brightness(1.15);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(12px);
 }
 
-.node-content {
+.family-node:hover {
+  transform: translateY(-3px) scale(1.02);
+  filter: brightness(1.2);
+}
+
+.node-body {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
-.node-icon-wrap {
-  width: 36px;
-  height: 36px;
+.avatar-ring {
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -56,64 +61,79 @@ defineProps(['data']);
   flex-shrink: 0;
 }
 
-.node-male .node-icon-wrap {
-  background: rgba(59, 130, 246, 0.2);
-  border: 1.5px solid rgba(59, 130, 246, 0.5);
-}
-.node-female .node-icon-wrap {
-  background: rgba(236, 72, 153, 0.2);
-  border: 1.5px solid rgba(236, 72, 153, 0.5);
-}
-
-.icon-male { color: #60a5fa; }
-.icon-female { color: #f472b6; }
-
-.node-info {
+.node-text {
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  overflow: hidden;
+  gap: 3px;
 }
 
-.name-text {
+.node-name {
   font-weight: 700;
   font-size: 13px;
+  letter-spacing: 0.8px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.place-text {
-  font-size: 11px;
-  opacity: 0.6;
+.node-place {
   display: flex;
   align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  opacity: 0.55;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
+/* Male theme */
 .node-male {
-  background: linear-gradient(135deg, #0f1a2e 0%, #162032 100%);
-  border: 1.5px solid #3b82f6;
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.25), inset 0 1px 0 rgba(59, 130, 246, 0.1);
+  background: linear-gradient(145deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.9));
+  border: 1.5px solid rgba(96, 165, 250, 0.5);
+  box-shadow:
+    0 0 0 1px rgba(96, 165, 250, 0.1),
+    0 4px 24px rgba(96, 165, 250, 0.15),
+    inset 0 1px 0 rgba(96, 165, 250, 0.08);
   color: #e0ecff;
 }
-.node-female {
-  background: linear-gradient(135deg, #1e0a1a 0%, #2a1225 100%);
-  border: 1.5px solid #ec4899;
-  box-shadow: 0 0 20px rgba(236, 72, 153, 0.25), inset 0 1px 0 rgba(236, 72, 153, 0.1);
-  color: #ffe0ef;
+.node-male .avatar-ring {
+  background: rgba(59, 130, 246, 0.15);
+  border: 1.5px solid rgba(96, 165, 250, 0.4);
+  color: #60a5fa;
+}
+.node-male:hover {
+  box-shadow:
+    0 0 0 1px rgba(96, 165, 250, 0.3),
+    0 8px 32px rgba(96, 165, 250, 0.25);
 }
 
-/* Hide Vue Flow handles completely */
-.hidden-handle {
+/* Female theme */
+.node-female {
+  background: linear-gradient(145deg, rgba(30, 10, 26, 0.95), rgba(50, 20, 40, 0.9));
+  border: 1.5px solid rgba(244, 114, 182, 0.5);
+  box-shadow:
+    0 0 0 1px rgba(244, 114, 182, 0.1),
+    0 4px 24px rgba(244, 114, 182, 0.15),
+    inset 0 1px 0 rgba(244, 114, 182, 0.08);
+  color: #ffe0ef;
+}
+.node-female .avatar-ring {
+  background: rgba(236, 72, 153, 0.15);
+  border: 1.5px solid rgba(244, 114, 182, 0.4);
+  color: #f472b6;
+}
+.node-female:hover {
+  box-shadow:
+    0 0 0 1px rgba(244, 114, 182, 0.3),
+    0 8px 32px rgba(244, 114, 182, 0.25);
+}
+
+.invisible-handle {
   width: 8px !important;
   height: 8px !important;
   background: transparent !important;
   border: none !important;
-  opacity: 0;
+  opacity: 0 !important;
 }
 </style>
