@@ -254,18 +254,17 @@ function onNodeClick({ node }) {
       const personA = store.members.find(m => m.id === a);
       const personB = store.members.find(m => m.id === b);
       const result = getRelationship(store.members, a, b);
-      // The function returns "B is [label] of A", so display: B IS THE [label] OF A
       $q.dialog({
         title: '🔗 Relationship Found',
         message: `<div style="text-align:center;padding:12px 0">
           <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:16px">
-            <div style="padding:6px 16px;border-radius:10px;background:${personB?.gender === 'female' ? 'rgba(244,114,182,0.15)' : 'rgba(96,165,250,0.15)'};border:1px solid ${personB?.gender === 'female' ? 'rgba(244,114,182,0.3)' : 'rgba(96,165,250,0.3)'};font-size:14px;font-weight:600">${personB?.name}</div>
+            <div style="padding:6px 16px;border-radius:10px;background:${personA?.gender === 'female' ? 'rgba(244,114,182,0.15)' : 'rgba(96,165,250,0.15)'};border:1px solid ${personA?.gender === 'female' ? 'rgba(244,114,182,0.3)' : 'rgba(96,165,250,0.3)'};font-size:14px;font-weight:600">${personA?.name}</div>
           </div>
           <div style="font-size:11px;color:#6b7280;letter-spacing:2px;margin-bottom:4px">IS THE</div>
           <div style="font-size:28px;font-weight:800;color:#a78bfa;margin:8px 0;letter-spacing:1px">${result.label}</div>
           <div style="font-size:11px;color:#6b7280;letter-spacing:2px;margin-top:4px;margin-bottom:16px">OF</div>
           <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:16px">
-            <div style="padding:6px 16px;border-radius:10px;background:${personA?.gender === 'female' ? 'rgba(244,114,182,0.15)' : 'rgba(96,165,250,0.15)'};border:1px solid ${personA?.gender === 'female' ? 'rgba(244,114,182,0.3)' : 'rgba(96,165,250,0.3)'};font-size:14px;font-weight:600">${personA?.name}</div>
+            <div style="padding:6px 16px;border-radius:10px;background:${personB?.gender === 'female' ? 'rgba(244,114,182,0.15)' : 'rgba(96,165,250,0.15)'};border:1px solid ${personB?.gender === 'female' ? 'rgba(244,114,182,0.3)' : 'rgba(96,165,250,0.3)'};font-size:14px;font-weight:600">${personB?.name}</div>
           </div>
           ${result.explanation ? `<div style="color:#9ca3af;font-size:12px;margin-top:8px;padding:8px 12px;background:rgba(139,92,246,0.08);border-radius:8px;border:1px solid rgba(139,92,246,0.15)">${result.explanation}</div>` : ''}
         </div>`,
