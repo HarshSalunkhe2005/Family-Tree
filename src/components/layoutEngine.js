@@ -25,8 +25,16 @@ export function computeLayout(members) {
   const byId = {};
   members.forEach(m => { byId[m.id] = m; });
 
-  // Find roots: members whose parentId is null or points to a non-existent member
-  const roots = members.filter(m => !m.parentId || !byId[m.parentId]);
+  // Find roots: members with no valid parentId.
+  // EXCLUDE people who "married in" (no parentId, but spouse HAS a parentId) — they're not true roots.
+  const roots = members.filter(m => {
+    if (m.parentId && byId[m.parentId]) return false; // has a valid parent → not root
+    if (m.spouseId && byId[m.spouseId]) {
+      const spouse = byId[m.spouseId];
+      if (spouse.parentId && byId[spouse.parentId]) return false; // spouse has a parent → this person married in
+    }
+    return true;
+  });
 
   // Build adjacency: parent -> children
   const childrenOf = {};
@@ -68,18 +76,13 @@ export function computeLayout(members) {
   const visited = new Set();
   const queue = [];
 
-  // Group roots: if a root has a spouse who is also a root, process together
+  // Seed roots at level 0 (don't pre-assign spouses — BFS handles that)
   const processedRoots = new Set();
   roots.forEach(r => {
     if (processedRoots.has(r.id)) return;
     processedRoots.add(r.id);
     level[r.id] = 0;
     queue.push(r.id);
-    if (r.spouseId && byId[r.spouseId]) {
-      processedRoots.add(r.spouseId);
-      level[r.spouseId] = 0;
-      queue.push(r.spouseId);
-    }
   });
 
   let head = 0;
@@ -135,8 +138,7 @@ export function computeLayout(members) {
       placed.add(id);
 
       if (m.spouseId && byId[m.spouseId] && level[m.spouseId] == l && !placed.has(m.spouseId)) {
-        // Place couple together (male on left by convention, but use data order)
-        const spouse = byId[m.spouseId];
+        // Place couple together (male on left by convention)
         placed.add(m.spouseId);
         if (m.gender === 'male') {
           ordered.push({ type: 'couple', left: m.id, right: m.spouseId });
