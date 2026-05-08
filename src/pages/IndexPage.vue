@@ -317,10 +317,10 @@ const flowEdges = computed(() => {
       const junctionId = coupleMap.value[m.parentId];
       if (junctionId) {
         // Parent has a spouse → route child edge from junction dot
-        edges.push({ id: `e-p-${m.id}`, source: junctionId, target: m.id, animated: true, style: { stroke: '#3b82f6', strokeWidth: 2 } });
+        edges.push({ id: `e-p-${m.id}`, source: junctionId, target: m.id, type: 'smoothstep', animated: true, style: { stroke: '#3b82f6', strokeWidth: 2 } });
       } else {
         // Single parent → direct edge
-        edges.push({ id: `e-p-${m.id}`, source: m.parentId, target: m.id, animated: true, style: { stroke: '#3b82f6', strokeWidth: 2 } });
+        edges.push({ id: `e-p-${m.id}`, source: m.parentId, target: m.id, type: 'smoothstep', animated: true, style: { stroke: '#3b82f6', strokeWidth: 2 } });
       }
     }
 
@@ -399,18 +399,24 @@ function saveMember() {
       setTimeout(() => fitView({ padding: 0.5, duration: 600 }), 100);
       return;
     } else if (['Son', 'Daughter'].includes(form.value.relationType)) {
-      // FIX: Offset siblings horizontally so they don't stack
-      const existingChildren = store.getChildrenOf(pId);
-      // Also count children of spouse
+      // Center child below the couple midpoint (or parent if single)
       const parent = store.members.find(m => m.id === pId);
+      const existingChildren = store.getChildrenOf(pId);
       let spouseChildren = [];
       if (parent?.spouseId) {
         spouseChildren = store.getChildrenOf(parent.spouseId);
+        // Center X at the midpoint between parent and spouse
+        const spouse = store.members.find(m => m.id === parent.spouseId);
+        if (spouse) {
+          newX = (parent.x + spouse.x) / 2 + NODE_MID;
+        }
       }
       const allChildren = [...existingChildren, ...spouseChildren];
       const siblingCount = allChildren.length;
       newY += 180;
-      newX += (siblingCount * 220) - ((siblingCount * 220) / 2);
+      // Each sibling offsets 240px from center. Center point is newX (already set to couple midpoint above)
+      const SIBLING_GAP = 240;
+      newX += siblingCount * SIBLING_GAP - (siblingCount * SIBLING_GAP / 2);
     } else if (form.value.relationType === 'Spouse') {
       newX += 250; sId = dialog.value.parentId; pId = null;
     }
