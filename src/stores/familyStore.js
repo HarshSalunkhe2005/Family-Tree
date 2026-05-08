@@ -44,16 +44,28 @@ export const useFamilyStore = defineStore('family', () => {
   }
 
   function deleteMember(id) {
-    // Unlink spouse
     const member = members.value.find(m => m.id === id);
-    if (member?.spouseId) {
-      const spouse = members.value.find(m => m.id === member.spouseId);
+    if (!member) return;
+
+    const survivingSpouseId = member.spouseId;
+
+    // Unlink spouse
+    if (survivingSpouseId) {
+      const spouse = members.value.find(m => m.id === survivingSpouseId);
       if (spouse) spouse.spouseId = null;
     }
-    // Orphan children
+
+    // Reassign or orphan children
     members.value.forEach(m => {
-      if (m.parentId === id) m.parentId = null;
+      if (m.parentId === id) {
+        if (survivingSpouseId) {
+          m.parentId = survivingSpouseId; // Reassign to surviving spouse
+        } else {
+          m.parentId = null; // Truly orphan
+        }
+      }
     });
+
     members.value = members.value.filter(m => m.id !== id);
   }
 

@@ -153,17 +153,7 @@ export function computeLayout(members) {
     sortedLevels[l] = ordered;
   });
 
-  // Calculate widths bottom-up so parents center over children
-  // Width of a "unit" (single or couple) = max(own width, sum of children widths)
-  function getUnitWidth(unit) {
-    let ownWidth;
-    if (unit.type === 'couple') {
-      ownWidth = NODE_W * 2 + SPOUSE_GAP;
-    } else {
-      ownWidth = NODE_W;
-    }
-
-    // Get children
+  function getChildUnits(unit) {
     let kids = [];
     if (unit.type === 'couple') {
       const ck = coupleKey(unit.left, unit.right);
@@ -176,15 +166,28 @@ export function computeLayout(members) {
       kids = childrenOf[unit.id] || [];
     }
 
-    if (kids.length === 0) return ownWidth;
+    if (kids.length === 0) return [];
 
-    // Children width = sum of their unit widths + gaps
     const childLevel = (level[kids[0]] ?? 0);
-    const childUnits = (sortedLevels[childLevel] || []).filter(u => {
+    return (sortedLevels[childLevel] || []).filter(u => {
       if (u.type === 'single') return kids.includes(u.id);
       if (u.type === 'couple') return kids.includes(u.left) || kids.includes(u.right);
       return false;
     });
+  }
+
+  const unitWidthCache = new Map();
+  function getUnitWidth(unit) {
+    const key = unit.type === 'couple' ? `${unit.left}-${unit.right}` : unit.id;
+    if (unitWidthCache.has(key)) return unitWidthCache.get(key);
+
+    let ownWidth = unit.type === 'couple' ? (NODE_W * 2 + SPOUSE_GAP) : NODE_W;
+    const childUnits = getChildUnits(unit);
+    
+    if (childUnits.length === 0) {
+      unitWidthCache.set(key, ownWidth);
+      return ownWidth;
+    }
 
     let childrenWidth = 0;
     childUnits.forEach((cu, i) => {
@@ -192,79 +195,68 @@ export function computeLayout(members) {
       if (i < childUnits.length - 1) childrenWidth += H_GAP;
     });
 
-    return Math.max(ownWidth, childrenWidth);
+    const w = Math.max(ownWidth, childrenWidth);
+    unitWidthCache.set(key, w);
+    return w;
   }
 
-  // Assign X positions level by level
   const positions = {}; // memberId -> { x, y }
   const junctions = []; // { id, x, y, coupleKey }
 
-  // Process top-down
-  const maxLevel = Math.max(...Object.keys(levels).map(Number), 0);
+  // Assign X positions recursively starting from roots
+  const rootUnits = sortedLevels[0] || [];
+  let totalRootWidth = 0;
+  rootUnits.forEach((u, i) => {
+    totalRootWidth += getUnitWidth(u);
+    if (i < rootUnits.length - 1) totalRootWidth += H_GAP;
+  });
 
-  for (let l = 0; l <= maxLevel; l++) {
-    const units = sortedLevels[l] || [];
-    if (units.length === 0) continue;
+  let currentRootX = -totalRootWidth / 2;
 
+  function placeUnit(unit, startX, l) {
     const y = l * (NODE_H + V_GAP);
+    const w = getUnitWidth(unit);
+    const ownWidth = unit.type === 'couple' ? (NODE_W * 2 + SPOUSE_GAP) : NODE_W;
+    
+    // Center the actual node(s) within the reserved width `w`
+    const offset = (w - ownWidth) / 2;
+    const nodeX = startX + offset;
 
-    // Calculate total width of this level
-    let totalWidth = 0;
-    const unitWidths = units.map(u => getUnitWidth(u));
-    unitWidths.forEach((w, i) => {
-      totalWidth += w;
-      if (i < unitWidths.length - 1) totalWidth += H_GAP;
-    });
+    if (unit.type === 'couple') {
+      positions[unit.left] = { x: nodeX, y };
+      positions[unit.right] = { x: nodeX + NODE_W + SPOUSE_GAP, y };
 
-    // If this is NOT the first level, try to center under parent
-    let startX;
-    if (l === 0) {
-      startX = -totalWidth / 2;
+      const jx = nodeX + NODE_W + SPOUSE_GAP / 2 - JUNCTION_SIZE / 2;
+      const jy = y + NODE_H / 2 - JUNCTION_SIZE / 2;
+      const ck = coupleKey(unit.left, unit.right);
+      junctions.push({ id: `junc-${ck}`, x: jx, y: jy, coupleKey: ck, leftId: unit.left, rightId: unit.right });
     } else {
-      // Find the parent couple/unit center and align under it
-      startX = -totalWidth / 2; // fallback
-      // Try to center under parent
-      const firstUnit = units[0];
-      const firstId = firstUnit.type === 'couple' ? firstUnit.left : firstUnit.id;
-      const parent = byId[firstId];
-      if (parent?.parentId && positions[parent.parentId]) {
-        const parentPos = positions[parent.parentId];
-        const parentMember = byId[parent.parentId];
-        if (parentMember?.spouseId && positions[parentMember.spouseId]) {
-          // Center under couple
-          const spousePos = positions[parentMember.spouseId];
-          const coupleCenter = (parentPos.x + spousePos.x + NODE_W) / 2;
-          startX = coupleCenter - totalWidth / 2;
-        } else {
-          startX = parentPos.x + NODE_W / 2 - totalWidth / 2;
-        }
-      }
+      positions[unit.id] = { x: nodeX, y };
     }
 
-    let currentX = startX;
-    units.forEach((unit, i) => {
-      const w = unitWidths[i];
+    // Place children
+    const childUnits = getChildUnits(unit);
+    if (childUnits.length > 0) {
+      let childrenWidth = 0;
+      childUnits.forEach((cu, i) => {
+        childrenWidth += getUnitWidth(cu);
+        if (i < childUnits.length - 1) childrenWidth += H_GAP;
+      });
 
-      if (unit.type === 'couple') {
-        const coupleWidth = NODE_W * 2 + SPOUSE_GAP;
-        const offset = (w - coupleWidth) / 2;
-
-        positions[unit.left] = { x: currentX + offset, y };
-        positions[unit.right] = { x: currentX + offset + NODE_W + SPOUSE_GAP, y };
-
-        // Junction at midpoint
-        const jx = currentX + offset + NODE_W + SPOUSE_GAP / 2 - JUNCTION_SIZE / 2;
-        const jy = y + NODE_H / 2 - JUNCTION_SIZE / 2;
-        const ck = coupleKey(unit.left, unit.right);
-        junctions.push({ id: `junc-${ck}`, x: jx, y: jy, coupleKey: ck, leftId: unit.left, rightId: unit.right });
-      } else {
-        const offset = (w - NODE_W) / 2;
-        positions[unit.id] = { x: currentX + offset, y };
-      }
-
-      currentX += w + H_GAP;
-    });
+      // Start placing children centered under this unit's allocated width
+      let childStartX = startX + (w - childrenWidth) / 2;
+      childUnits.forEach(cu => {
+        placeUnit(cu, childStartX, l + 1);
+        childStartX += getUnitWidth(cu) + H_GAP;
+      });
+    }
   }
+
+  // Place all root trees
+  rootUnits.forEach(u => {
+    placeUnit(u, currentRootX, 0);
+    currentRootX += getUnitWidth(u) + H_GAP;
+  });
 
   // Build final node list
   const nodes = members.map(m => ({
@@ -305,6 +297,8 @@ export function computeLayout(members) {
           id: `e-child-${m.id}`,
           source: juncId,
           target: m.id,
+          sourceHandle: 'bottom',
+          targetHandle: 'top',
           type: 'smoothstep',
           animated: false,
           style: { stroke: '#60a5fa', strokeWidth: 2 },
@@ -314,6 +308,8 @@ export function computeLayout(members) {
           id: `e-child-${m.id}`,
           source: m.parentId,
           target: m.id,
+          sourceHandle: 'bottom',
+          targetHandle: 'top',
           type: 'smoothstep',
           animated: false,
           style: { stroke: '#60a5fa', strokeWidth: 2 },
